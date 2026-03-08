@@ -32,89 +32,37 @@
 
   <label>Return URL (the page OPay will redirect to after payment)</label>
   <input id="returnUrl" type="text" value="./return.html?get=1" />
-
-  <button id="payBtn">Create payment & open cashier</button>
+  
+  <button onclick="startPayment()">Pay now</button>
 
   <pre id="log" style="margin-top:12px; background:#f6f8fa; padding:10px; border-radius:6px; overflow:auto; max-height:220px"></pre>
 
 <script>
-(async function(){
-  // PUT YOUR PUBLIC KEY and MERCHANT ID (these are safe to be public only for 'create payment' calls)
-  // Replace sandbox/production URL as required by your account.
-  const OPAY_PUBLIC_KEY = 'OPAYPUB17587024528030.38691731493856185';
-  const OPAY_MERCHANT_ID = '281825092428140';
-  const OPAY_CASHIER_CREATE_URL = 'https://sandboxapi.opaycheckout.com/api/v1/international/cashier/create';
+async function startPayment() {
+  const payload = {
+    amount: 5000,
+    currency: 'NGN',
+    customer: { name: 'John Doe', email: 'john@example.com' },
+    merchantOrderId: 'order_123456789',
+    redirectUrl: 'https://videocourses.netlify.app/return.html', // optional
+    callbackUrl: 'https://videocourses.netlify.app/.netlify/functions/webhook' // recommended
+  };
 
-  const byId = id => document.getElementById(id);
-  const log = s => byId('log').textContent = (new Date().toLocaleTimeString()) + '  ' + s + '\n' + byId('log').textContent;
-
-  byId('payBtn').addEventListener('click', async () => {
-    const amount = Number(byId('amount').value) || 0;
-    const currency = (byId('currency').value || 'NGN').toUpperCase();
-    const orderRef = byId('orderRef').value || 'order_' + Date.now();
-    const name = byId('name').value || '';
-    const email = byId('email').value || '';
-    const returnUrl = byId('returnUrl').value || window.location.origin + '/return.html?get=1';
-
-    // Build payload according to OPay Cashier Create API expectations.
-    // Confirm exact field names and amount units (kobo vs Naira) in the OPay docs for your account.
-    const payload = {
-      merchantOrderId: orderRef,
-      amount: { total: amount, currency },
-      description: 'Frontend-only demo payment',
-      redirectUrl: returnUrl,   // where OPay will redirect customer after payment (returnUrl/return)
-      callbackUrl: '',          // you cannot handle webhook in frontend-only; leave empty (not ideal)
-      customer: { name, email },
-      merchantName: 'Demo Shop (frontend-only)'
-    };
-
-    try {
-      log('Creating payment with OPay cashier create endpoint...');
-      const resp = await fetch(OPAY_CASHIER_CREATE_URL, {
-        method: 'POST',
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPAY_PUBLIC_KEY}`,
-          'MerchantId': OPAY_MERCHANT_ID
-        },
-        body: JSON.stringify(payload),
-        credentials: 'omit'
-      });
-
-      if (!resp.ok) {
-        const txt = await resp.text();
-        throw new Error('OPay create failed ' + resp.status + ' — ' + txt);
-      }
-
-      const data = await resp.json();
-      log('Create response: ' + JSON.stringify(data));
-
-      // common response paths -> cashierUrl / checkoutUrl / data.cashierUrl
-      const checkoutUrl =
-        data?.data?.cashierUrl ||
-        data?.data?.checkoutUrl ||
-        data?.checkoutUrl ||
-        data?.cashierUrl ||
-        data?.data?.cashier_url ||
-        null;
-
-      if (!checkoutUrl) {
-        throw new Error('Could not find cashier URL in OPay response. Inspect the raw response in the console.');
-      }
-
-      log('Opening cashier page...');
-      // open in new tab so user can come back to this page if needed
-      window.open(checkoutUrl, '_blank');
-      // Optionally redirect the current tab:
-      // window.location.href = checkoutUrl;
-    } catch (err) {
-      console.error(err);
-      log('ERROR: ' + err.message);
-      alert('Payment initialization error: ' + err.message);
-    }
+  const resp = await fetch('https://videocourses.netlify.app/.netlify/functions/create-payment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
   });
-})();
+
+  const data = await resp.json();
+  if (data.cashierUrl) {
+    // open cashier
+    window.location.href = data.cashierUrl;
+  } else {
+    console.error('No cashierUrl', data);
+    alert('Payment initialization failed. See console.');
+  }
+}
 </script>
 </body>
 </html>

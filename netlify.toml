@@ -2,10 +2,5 @@
 	path = "/hello"
 	function ="hello"  
 
-[[edge_functions]]
-	path = "/netlify/functions/webhook"
-	function ="webhook"
-
-
 [functions]
   directory = "netlify/functions"
