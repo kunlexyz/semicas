@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Payment result (return)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>body{font-family:system-ui;padding:20px;max-width:760px;margin:auto}</style>
+</head>
+<body>
+  <h1>Payment result (client-side)</h1>
+  <p id="note" style="color:#666">This page shows the parameters OPay redirected with. This is not a secure confirmation — a server webhook is the authoritative source.</p>
+  <pre id="out" style="background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto"></pre>
+
+<script>
+(function(){
+  const out = document.getElementById('out');
+
+  // Try to read query params first
+  const qs = Object.fromEntries(new URLSearchParams(location.search).entries());
+  // You may also want to read POST body if OPay POSTs to return URL;
+  // browsers don't expose an auto POST body to JS when redirecting (server receives POST),
+  // so in many setups OPay will POST to returnUrl server-side or perform a client redirect with params.
+  // If OPay returns POST and you receive it in the browser, the easiest way is to have server accept it,
+  // then render this page. In pure frontend-only, prefer using a returnUrl that ends up with GET params.
+  const body = { queryParams: qs, hash: location.hash };
+
+  out.textContent = JSON.stringify(body, null, 2);
+
+  // Example: if OPay provided merchantOrderId and status in query, you can show them:
+  if (qs.merchantOrderId || qs.orderId || qs.status) {
+    const mr = qs.merchantOrderId || qs.orderId || 'n/a';
+    const st = qs.status || 'n/a';
+    const el = document.createElement('div');
+    el.innerHTML = `<p><strong>Order:</strong> ${mr} — <strong>status:</strong> ${st}</p>`;
+    document.body.insertBefore(el, out);
+  }
+
+  // FINAL NOTE:
+  const warn = document.createElement('p');
+  warn.style.color = 'crimson';
+  warn.style.fontWeight = '600';
+  warn.textContent = 'Client-side page: This is NOT proof of payment. A server-to-server callback (webhook) or a backend query to payment-status API is required to validate payment.';
+  document.body.appendChild(warn);
+})();
+</script>
+</body>
+</html>
