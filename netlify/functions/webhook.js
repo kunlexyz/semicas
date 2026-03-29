@@ -1,120 +1,146 @@
-// netlify/functions/webhook.js
-const crypto = require('crypto');
-const admin = require('firebase-admin');
+const fetch = require("node-fetch"); // if your Netlify runtime already has global fetch, you can remove this
 
-function initFirebase() {
-  if (global._firebaseAdminInitialized) return admin;
-  const base64 = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!base64) throw new Error('FIREBASE_SERVICE_ACCOUNT env var not set');
-
-  const serviceAccountJson = JSON.parse(Buffer.from(base64, 'base64').toString('utf8'));
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccountJson)
-  });
-  global._firebaseAdminInitialized = true;
-  return admin;
-}
+const OPAY_CASHIER_CREATE_URL =
+  "https://sandboxapi.opaycheckout.com/api/v1/international/cashier/create";
 
 exports.handler = async (event) => {
   try {
-    // Netlify passes raw body as string in event.body
-    if (event.httpMethod !== 'POST') {
-      return { statusCode: 405, body: 'Method Not Allowed' };
+    // Handle CORS preflight
+    if (event.httpMethod === "OPTIONS") {
+      return {
+        statusCode: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type"
+        },
+        body: ""
+      };
     }
 
-    const OPAY_SECRET_KEY = process.env.OPAY_SECRET_KEY;
-    if (!OPAY_SECRET_KEY) {
-      console.error('OPAY_SECRET_KEY not configured');
-      return { statusCode: 500, body: 'Server misconfigured' };
+    if (event.httpMethod !== "POST") {
+      return {
+        statusCode: 405,
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: "Method Not Allowed"
+      };
     }
 
-    const headers = Object.keys(event.headers || {}).reduce((acc, k) => {
-      acc[k.toLowerCase()] = event.headers[k];
-      return acc;
-    }, {});
+    const OPAY_PUBLIC_KEY = process.env.OPAY_PUBLIC_KEY;
+    const OPAY_MERCHANT_ID = process.env.OPAY_MERCHANT_ID;
 
-    const signatureHeader = headers['signature'] || headers['authorization'] || '';
-    const requestTimestamp = headers['requesttimestamp'] || '';
-
-    const bodyString = event.body || ''; // raw string
-    // Build the data to sign exactly as OPay expects. Many examples use timestamp + body.
-    const dataToSign = requestTimestamp + bodyString;
-
-    // Compute HMAC-SHA512
-    const computedSignature = crypto.createHmac('sha512', OPAY_SECRET_KEY).update(dataToSign).digest('hex');
-
-    let receivedSignature = String(signatureHeader || '').replace(/^HMAC\s+/i, '').replace(/^sha512=/i, '').trim();
-
-    let isValid = false;
-    try {
-      if (computedSignature.length === receivedSignature.length) {
-        isValid = crypto.timingSafeEqual(Buffer.from(computedSignature, 'hex'), Buffer.from(receivedSignature, 'hex'));
-      }
-    } catch (e) {
-      isValid = false;
+    if (!OPAY_PUBLIC_KEY || !OPAY_MERCHANT_ID) {
+      return {
+        statusCode: 500,
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({
+          error: "Missing OPAY_PUBLIC_KEY or OPAY_MERCHANT_ID"
+        })
+      };
     }
 
-    if (!isValid) {
-      console.warn('Invalid signature', { computedSignature, receivedSignature });
-      return { statusCode: 400, body: 'Invalid signature' };
-    }
+    // Read JSON sent from frontend
+    const input = JSON.parse(event.body || "{}");
 
-    // Signature valid
-    console.log('✅ Valid webhook signature');
+    const amount = Number(input.amount || 0);
+    const currency = String(input.currency || "NGN").toUpperCase();
+    const merchantOrderId =
+      String(input.merchantOrderId || `order_${Date.now()}`).trim();
 
-    // Parse payload and update Firestore
-    const payload = JSON.parse(bodyString || '{}');
-    initFirebase();
-    const db = admin.firestore();
+    const customer = input.customer || {};
+    const redirectUrl =
+      input.redirectUrl || "https://videocourses.netlify.app/return.html";
+    const callbackUrl =
+      input.callbackUrl ||
+      "https://videocourses.netlify.app/.netlify/functions/webhook";
 
-    const merchantOrderId = payload.merchantOrderId || payload.orderId || payload.merchant_order_id;
-    const status = payload.status || payload.paymentStatus || '';
+    // Build OPay payload
+    // Important: some OPay versions require `reference`
+    const payload = {
+      reference: merchantOrderId,
+      merchantOrderId: merchantOrderId,
+      amount: {
+        total: amount,
+        currency: currency
+      },
+      description: input.description || "Payment",
+      redirectUrl: redirectUrl,
+      callbackUrl: callbackUrl,
+      customer: {
+        name: customer.name || "",
+        email: customer.email || "",
+        phoneNumber: customer.phoneNumber || customer.phone || ""
+      },
+      merchantName: input.merchantName || "Video Courses"
+    };
 
-    if (!merchantOrderId) {
-      console.warn('No merchantOrderId in payload', payload);
-      return { statusCode: 400, body: 'No merchantOrderId' };
-    }
-
-    // Update the order in Firestore
-    const orderRef = db.collection('orders').doc(merchantOrderId);
-
-    // Optionally load current order
-    const orderSnap = await orderRef.get();
-
-    if (!orderSnap.exists) {
-      console.warn('Order not found in Firestore:', merchantOrderId);
-      // You may want to create it or reject. Here we'll create minimal doc.
-      await orderRef.set({
-        merchantOrderId,
-        status: status || 'UNKNOWN',
-        opayPayload: payload,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-
-      return { statusCode: 200, body: 'OK' };
-    }
-
-    // Map OPay status to your own
-    let newStatus = 'PENDING';
-    if (String(status).toUpperCase() === 'SUCCESS' || String(payload?.paymentStatus).toUpperCase() === 'SUCCESS') {
-      newStatus = 'PAID';
-    } else if (String(status).toUpperCase() === 'FAILED') {
-      newStatus = 'FAILED';
-    } else {
-      newStatus = status || 'UNKNOWN';
-    }
-
-    await orderRef.update({
-      status: newStatus,
-      opayPayload: payload,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    const resp = await fetch(OPAY_CASHIER_CREATE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPAY_PUBLIC_KEY}`,
+        MerchantId: OPAY_MERCHANT_ID
+      },
+      body: JSON.stringify(payload)
     });
 
-    console.log(`Order ${merchantOrderId} updated to ${newStatus}`);
-    return { statusCode: 200, body: 'OK' };
+    const rawText = await resp.text();
 
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      data = { raw: rawText };
+    }
+
+    if (!resp.ok) {
+      return {
+        statusCode: resp.status,
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({
+          error: "OPay request failed",
+          raw: data
+        })
+      };
+    }
+
+    const cashierUrl =
+      data?.data?.cashierUrl ||
+      data?.data?.checkoutUrl ||
+      data?.cashierUrl ||
+      data?.checkoutUrl ||
+      null;
+
+    if (!cashierUrl) {
+      return {
+        statusCode: 502,
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({
+          error: "No cashierUrl in OPay response",
+          raw: data
+        })
+      };
+    }
+
+    return {
+      statusCode: 200,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        cashierUrl,
+        merchantOrderId,
+        raw: data
+      })
+    };
   } catch (err) {
-    console.error('Webhook error', err);
-    return { statusCode: 500, body: 'Server error' };
+    return {
+      statusCode: 500,
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({
+        error: err.message || "Server error"
+      })
+    };
   }
 };
