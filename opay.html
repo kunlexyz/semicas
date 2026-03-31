@@ -40,27 +40,29 @@
 <script>
 async function startPayment() {
   const payload = {
+    country: "EG",
     amount: 5000,
-    currency: 'NGN',
-    customer: { name: 'John Doe', email: 'john@example.com' },
-    merchantOrderId: '281825092428140',
-    redirectUrl: 'https://videocourses.netlify.app/return.html', // optional
-    callbackUrl: 'https://videocourses.netlify.app/.netlify/functions/webhook' // recommended
+    currency: "EGP",
+    customer: { name: "John Doe", email: "john@example.com" },
+    merchantOrderId: "281825092428140",
+    reference: "281825092428140",
+    redirectUrl: "https://videocourses.netlify.app/return.html",
+    callbackUrl: "https://videocourses.netlify.app/.netlify/functions/webhook"
   };
 
-  const resp = await fetch('https://videocourses.netlify.app/.netlify/functions/create-payment', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  const resp = await fetch("https://videocourses.netlify.app/.netlify/functions/create-payment", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
 
   const data = await resp.json();
+
   if (data.cashierUrl) {
-    // open cashier
     window.location.href = data.cashierUrl;
   } else {
-    console.error('No cashierUrl', data);
-    alert('Payment initialization failed. See console.');
+    console.error("No cashierUrl", data);
+    alert("Payment initialization failed. See console.");
   }
 }
 </script>
