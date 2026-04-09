@@ -49,19 +49,27 @@ exports.handler = async (event) => {
     const customer = input.customer || {};
 
     const payload = {
-      country: String(input.country || "NG").toUpperCase(),
-      reference,
+      reference: "TEST_REF_123456", // 🔥 FORCE VALUE
+      merchantOrderId: "TEST_REF_123456",
+    
       amount: {
-        total: amount,
-        currency
+        total: 5000,
+        currency: "NGN"
       },
-      returnUrl: input.redirectUrl || input.returnUrl || "https://videocourses.netlify.app/return.html",
-      callbackUrl: input.callbackUrl || "https://videocourses.netlify.app/.netlify/functions/webhook",
-      userInfo: {
-        userName: customer.name || "",
-        userEmail: customer.email || "",
-        userMobile: customer.phone || customer.phoneNumber || ""
-      }
+    
+      description: "Test payment",
+    
+      redirectUrl: "https://videocourses.netlify.app/return.html",
+    
+      callbackUrl: "https://videocourses.netlify.app/.netlify/functions/webhook",
+    
+      customer: {
+        name: "Test User",
+        email: "test@example.com",
+        phoneNumber: "08000000000"
+      },
+    
+      merchantName: "Video Courses"
     };
 
     const resp = await fetch(OPAY_CASHIER_CREATE_URL, {
