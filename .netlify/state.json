@@ -1,20 +1,20 @@
 {
 	"geolocation": {
 		"data": {
-			"city": "Lagos",
+			"city": "Abakaliki",
 			"country": {
 				"code": "NG",
 				"name": "Nigeria"
 			},
 			"subdivision": {
-				"code": "LA",
-				"name": "Lagos"
+				"code": "EB",
+				"name": "Ebonyi State"
 			},
 			"timezone": "Africa/Lagos",
-			"latitude": 6.4474,
-			"longitude": 3.3903
+			"latitude": 6.3126,
+			"longitude": 8.1162
 		},
-		"timestamp": 1772868497558
+		"timestamp": 1776772087704
 	},
 	"promptVSCodeSettings": true
 }
