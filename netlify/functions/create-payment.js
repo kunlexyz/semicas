@@ -41,7 +41,7 @@ exports.handler = async (event) => {
     const input = JSON.parse(event.body || "{}");
 
     const amount = Number(input.amount || 0);
-    const currency = String(input.currency || "NGN").toUpperCase();
+    const currency = String(input.currency || "EGP").toUpperCase();
     const reference = String(
       input.reference || input.merchantOrderId || `ref_${Date.now()}`
     ).trim();
@@ -51,11 +51,11 @@ exports.handler = async (event) => {
     const payload = {
       reference: input.merchantOrderId || `ref_${Date.now()}`,
     
-      country: "NG",
+      country: "EG",
     
       amount: {
         total: input.amount,
-        currency: input.currency || "NGN"
+        currency: input.currency || "EGP"
       },
     
       returnUrl: input.redirectUrl,

@@ -19,7 +19,7 @@
   <input id="amount" type="number" value="5000" />
 
   <label>Currency</label>
-  <input id="currency" type="text" value="NGN" />
+  <input id="currency" type="text" value="EGP" />
 
   <label>Order reference (optional)</label>
   <input id="orderRef" type="text" placeholder="order_12345" />
@@ -43,7 +43,7 @@ async function startPayment() {
 
   const payload = {
     amount: 5000,
-    currency: "NGN",
+    currency: "EGP",
     customer: { name: "John Doe", email: "john@example.com" },
     merchantOrderId: "281825092428140",
     redirectUrl: "https://videocourses.netlify.app/return.html",
