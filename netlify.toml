@@ -1,6 +1,2 @@
 [functions]
   directory = "netlify/functions"
-	
-[[edge_functions]]
-	path = "/hello"
-	function ="hello"
