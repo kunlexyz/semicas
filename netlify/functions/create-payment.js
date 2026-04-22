@@ -68,11 +68,11 @@ exports.handler = async (event) => {
         userMobile: input.customer?.phone || "08000000000"
       },
     
-      // 🔥 THIS IS THE MISSING PART
       productList: [
         {
           productId: "P001",
           name: "Video Course",
+          description: "Access to premium video course", // 🔥 REQUIRED FIX
           price: input.amount,
           quantity: 1
         }
